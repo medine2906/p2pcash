@@ -1,6 +1,13 @@
 import "server-only";
 import { requireEnv } from "./env";
 
+const ANCHOR_TIMEOUT_MS = 20_000;
+
+/** fetch() with a hard timeout — an unresponsive anchor should fail loudly, not hang the request forever. */
+function anchorFetch(url: string, init?: RequestInit): Promise<Response> {
+  return fetch(url, { ...init, signal: AbortSignal.timeout(ANCHOR_TIMEOUT_MS) });
+}
+
 export interface AnchorConfig {
   webAuthEndpoint: string;
   transferServer: string;
@@ -29,7 +36,7 @@ export async function getAnchorConfig(): Promise<AnchorConfig> {
   };
 
   try {
-    const res = await fetch(`${anchorUrl}/.well-known/stellar.toml`, {
+    const res = await anchorFetch(`${anchorUrl}/.well-known/stellar.toml`, {
       cache: "force-cache",
       next: { revalidate: 3600 },
     });
@@ -61,7 +68,7 @@ export async function requestSep10Challenge(account: string): Promise<Sep10Chall
   const url = new URL(webAuthEndpoint);
   url.searchParams.set("account", account);
 
-  const res = await fetch(url.toString());
+  const res = await anchorFetch(url.toString());
   if (!res.ok) {
     throw new Error(`Anchor SEP-10 challenge failed: ${res.status} ${await res.text()}`);
   }
@@ -76,7 +83,7 @@ export interface Sep10TokenResponse {
 export async function submitSep10Challenge(signedTransactionXdr: string): Promise<Sep10TokenResponse> {
   const { webAuthEndpoint } = await getAnchorConfig();
 
-  const res = await fetch(webAuthEndpoint, {
+  const res = await anchorFetch(webAuthEndpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ transaction: signedTransactionXdr }),
@@ -127,7 +134,7 @@ export interface Sep38QuoteResponse {
 export async function getSep38Quote(req: Sep38QuoteRequest): Promise<Sep38QuoteResponse> {
   const { quoteServer } = await getAnchorConfig();
 
-  const res = await fetch(`${quoteServer}/quote`, {
+  const res = await anchorFetch(`${quoteServer}/quote`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders(req.jwt) },
     body: JSON.stringify({
@@ -174,7 +181,7 @@ export async function startSep6Deposit(req: Sep6DepositRequest): Promise<Sep6Dep
   if (req.amount) url.searchParams.set("amount", formatAnchorAmount(req.amount));
   if (req.quoteId) url.searchParams.set("quote_id", req.quoteId);
 
-  const res = await fetch(url.toString(), { headers: authHeaders(req.jwt) });
+  const res = await anchorFetch(url.toString(), { headers: authHeaders(req.jwt) });
   await assertOk(res, "SEP-6 deposit");
   return res.json();
 }
@@ -211,7 +218,7 @@ export async function startSep6Withdraw(req: Sep6WithdrawRequest): Promise<Sep6W
   if (req.amount) url.searchParams.set("amount", formatAnchorAmount(req.amount));
   if (req.quoteId) url.searchParams.set("quote_id", req.quoteId);
 
-  const res = await fetch(url.toString(), { headers: authHeaders(req.jwt) });
+  const res = await anchorFetch(url.toString(), { headers: authHeaders(req.jwt) });
   await assertOk(res, "SEP-6 withdraw");
   return res.json();
 }
@@ -253,7 +260,7 @@ export async function getSep6Transaction(jwt: string, id: string): Promise<Sep6T
   const url = new URL(`${transferServer}/transaction`);
   url.searchParams.set("id", id);
 
-  const res = await fetch(url.toString(), { headers: authHeaders(jwt) });
+  const res = await anchorFetch(url.toString(), { headers: authHeaders(jwt) });
   await assertOk(res, "SEP-6 transaction status");
   const { transaction } = await res.json();
   return transaction;
