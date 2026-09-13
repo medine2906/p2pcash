@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { getSep6Transaction } from "@/lib/anchor";
 import { getSupabaseServiceClient } from "@/lib/supabase";
 import type { WithdrawalStatus } from "@/lib/database.types";
+import { getErrorMessage } from "@/lib/errors";
 
 function mapAnchorStatus(status: string): WithdrawalStatus {
   if (status === "completed") return "completed";
@@ -36,7 +37,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ withdrawal: { ...withdrawal, status }, anchorTransaction: anchorTx });
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to fetch withdrawal status" },
+      { error: getErrorMessage(err, "Failed to fetch withdrawal status") },
       { status: 502 },
     );
   }

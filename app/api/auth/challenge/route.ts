@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requestSep10Challenge } from "@/lib/anchor";
+import { getErrorMessage } from "@/lib/errors";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(challenge);
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to fetch SEP-10 challenge" },
+      { error: getErrorMessage(err, "Failed to fetch SEP-10 challenge") },
       { status: 502 },
     );
   }

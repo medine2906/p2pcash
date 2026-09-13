@@ -4,6 +4,7 @@ import { getSep38Quote, startSep6Withdraw } from "@/lib/anchor";
 import { getOrCreateProfileId } from "@/lib/profiles";
 import { getSupabaseServiceClient } from "@/lib/supabase";
 import { TRY_SEP38_ASSET, usdcSep38Asset } from "@/lib/assets";
+import { getErrorMessage } from "@/lib/errors";
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to start withdrawal" },
+      { error: getErrorMessage(err, "Failed to start withdrawal") },
       { status: 502 },
     );
   }

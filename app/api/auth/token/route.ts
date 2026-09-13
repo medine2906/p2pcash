@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { submitSep10Challenge } from "@/lib/anchor";
 import { setSessionCookie } from "@/lib/session";
 import { getSupabaseServiceClient } from "@/lib/supabase";
+import { getErrorMessage } from "@/lib/errors";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
     ({ token: jwt } = await submitSep10Challenge(transaction));
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to exchange SEP-10 challenge" },
+      { error: getErrorMessage(err, "Failed to exchange SEP-10 challenge") },
       { status: 502 },
     );
   }

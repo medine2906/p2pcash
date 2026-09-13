@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { depositCollateral } from "@/lib/blend";
+import { getErrorMessage } from "@/lib/errors";
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ unsignedXdr });
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to prepare collateral transaction" },
+      { error: getErrorMessage(err, "Failed to prepare collateral transaction") },
       { status: 502 },
     );
   }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getSep38Quote } from "@/lib/anchor";
 import { TRY_SEP38_ASSET, usdcSep38Asset } from "@/lib/assets";
+import { getErrorMessage } from "@/lib/errors";
 
 /** Quotes the USDC needed to borrow (and cash out) a given TRY amount. */
 export async function POST(req: NextRequest) {
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ usdcAmount: Number(quote.sell_amount), quote });
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to fetch quote" },
+      { error: getErrorMessage(err, "Failed to fetch quote") },
       { status: 502 },
     );
   }

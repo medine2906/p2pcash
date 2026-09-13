@@ -4,6 +4,7 @@ import { submitSignedTransaction } from "@/lib/blend";
 import { startSep6Withdraw } from "@/lib/anchor";
 import { getOrCreateProfileId } from "@/lib/profiles";
 import { getSupabaseServiceClient } from "@/lib/supabase";
+import { getErrorMessage } from "@/lib/errors";
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to finalize loan" },
+      { error: getErrorMessage(err, "Failed to finalize loan") },
       { status: 502 },
     );
   }

@@ -1,7 +1,11 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { initWalletsKit } from "./wallets-kit";
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 interface WalletContextValue {
   publicKey: string | null;
@@ -25,14 +29,31 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [authenticated, setAuthenticated] = useState(false);
   const [authenticating, setAuthenticating] = useState(false);
 
+  // Initialize the kit as soon as the app mounts rather than on first click —
+  // browser wallet extensions (e.g. Freighter) inject their API into the page
+  // asynchronously, so calling this too late can make the very first connect
+  // attempt fail even though the extension is installed.
+  useEffect(() => {
+    initWalletsKit();
+  }, []);
+
   const connect = useCallback(async () => {
     setConnecting(true);
     setError(null);
     try {
       const kit = initWalletsKit();
-      const { address } = await kit.authModal();
-      setPublicKey(address);
-      return address;
+      try {
+        const { address } = await kit.authModal();
+        setPublicKey(address);
+        return address;
+      } catch {
+        // Retry once: a wallet extension not yet injected when the kit was
+        // initialized is the common cause of a failed first attempt.
+        await delay(300);
+        const { address } = await kit.authModal();
+        setPublicKey(address);
+        return address;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to connect wallet");
       return null;

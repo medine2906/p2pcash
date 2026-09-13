@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { submitSignedTransaction } from "@/lib/blend";
+import { getErrorMessage } from "@/lib/errors";
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ hash });
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to submit collateral transaction" },
+      { error: getErrorMessage(err, "Failed to submit collateral transaction") },
       { status: 502 },
     );
   }
