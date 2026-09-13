@@ -5,6 +5,7 @@ import { useWallet } from "@/lib/wallet-context";
 import { StatusTimeline, type TimelineStep } from "./StatusTimeline";
 
 const STEPS: TimelineStep[] = [
+  { key: "trustline", label: "Prepare to receive USDC" },
   { key: "collateral", label: "Lock crypto collateral" },
   { key: "borrow", label: "Borrow against it" },
   { key: "transfer", label: "Send TRY to your bank" },
@@ -50,7 +51,18 @@ export function BorrowFlow() {
     setStep({ index: 0, failed: false, message: null });
 
     try {
-      // 1. Lock collateral
+      // 1. Establish a USDC trustline first, if this account doesn't have one yet
+      const trustline = await postJson<{ needed: boolean; unsignedXdr?: string }>(
+        "/api/loans/trustline/prepare",
+        {},
+      );
+      if (trustline.needed && trustline.unsignedXdr) {
+        const signedTrustlineXdr = await signTransaction(trustline.unsignedXdr);
+        await postJson("/api/loans/trustline/submit", { signedXdr: signedTrustlineXdr });
+      }
+
+      // 2. Lock collateral
+      setStep({ index: 1, failed: false, message: null });
       const { unsignedXdr: collateralXdr } = await postJson<{ unsignedXdr: string }>(
         "/api/loans/collateral/prepare",
         { asset: collateralAsset, amount: Number(collateralAmount) },
@@ -58,8 +70,8 @@ export function BorrowFlow() {
       const signedCollateralXdr = await signTransaction(collateralXdr);
       await postJson("/api/loans/collateral/submit", { signedXdr: signedCollateralXdr });
 
-      // 2. Quote + borrow USDC
-      setStep({ index: 1, failed: false, message: null });
+      // 3. Quote + borrow USDC
+      setStep({ index: 2, failed: false, message: null });
       const { usdcAmount } = await postJson<{ usdcAmount: number }>("/api/loans/quote", {
         tryAmount: Number(tryAmount),
       });
@@ -68,8 +80,8 @@ export function BorrowFlow() {
       });
       const signedBorrowXdr = await signTransaction(borrowXdr);
 
-      // 3. Finalize: submit borrow tx + trigger SEP-6 withdrawal
-      setStep({ index: 2, failed: false, message: null });
+      // 4. Finalize: submit borrow tx + trigger SEP-6 withdrawal
+      setStep({ index: 3, failed: false, message: null });
       const { withdrawal } = await postJson<{ withdrawal: { id: string; status: string } }>(
         "/api/loans/borrow/submit",
         {
@@ -90,7 +102,7 @@ export function BorrowFlow() {
         if (res.ok) {
           setWithdrawalStatus(data.withdrawal.status);
           if (TERMINAL_STATUSES.has(data.withdrawal.status)) {
-            setStep({ index: data.withdrawal.status === "completed" ? 3 : 2, failed: data.withdrawal.status === "failed", message: null });
+            setStep({ index: data.withdrawal.status === "completed" ? 4 : 3, failed: data.withdrawal.status === "failed", message: null });
             if (pollRef.current) clearInterval(pollRef.current);
           }
         }

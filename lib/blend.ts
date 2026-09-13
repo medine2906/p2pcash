@@ -1,9 +1,9 @@
 import "server-only";
-import { Account, TransactionBuilder, rpc, xdr } from "@stellar/stellar-sdk";
+import { Account, Asset, Contract, Operation, TransactionBuilder, rpc, scValToNative, xdr } from "@stellar/stellar-sdk";
 import { PoolContractV2, RequestType, type Request } from "@blend-capital/blend-sdk";
 import { FixedMath } from "@blend-capital/blend-sdk";
 import { requireEnv } from "./env";
-import { STELLAR_NETWORK } from "./stellar";
+import { HORIZON_URL, STELLAR_NETWORK } from "./stellar";
 
 const BASE_FEE = "1000000"; // 0.1 XLM in stroops, generous for a Soroban invoke op
 const TX_TIMEOUT_SECONDS = 60;
@@ -69,6 +69,82 @@ export async function submitSignedTransaction(signedTxXdr: string) {
   }
 
   return { hash: sendResult.hash, result: getResult };
+}
+
+/** Simulates a read-only contract call and decodes its return value. */
+async function simulateContractCall(contractId: string, method: string, sourceAccount: string) {
+  const server = getRpcServer();
+  const account = await server.getAccount(sourceAccount);
+  const tx = new TransactionBuilder(account as unknown as Account, {
+    fee: BASE_FEE,
+    networkPassphrase: STELLAR_NETWORK,
+  })
+    .addOperation(new Contract(contractId).call(method))
+    .setTimeout(TX_TIMEOUT_SECONDS)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error(`Simulation failed for ${contractId}.${method}: ${JSON.stringify(sim)}`);
+  }
+  return scValToNative(sim.result!.retval);
+}
+
+export interface ClassicAsset {
+  code: string;
+  issuer: string;
+}
+
+/**
+ * Resolves the classic Stellar asset (code + issuer) wrapped by a Soroban
+ * token contract, via its SEP-41 `name()` call (returns "CODE:ISSUER" for a
+ * Stellar Asset Contract, or "native" for XLM, which never needs a trustline).
+ */
+export async function getClassicAsset(contractId: string, sourceAccount: string): Promise<ClassicAsset | null> {
+  const name = await simulateContractCall(contractId, "name", sourceAccount);
+  if (typeof name !== "string" || name === "native") return null;
+  const [code, issuer] = name.split(":");
+  if (!code || !issuer) return null;
+  return { code, issuer };
+}
+
+/** Checks (via Horizon) whether an account already trusts the given classic asset. */
+export async function hasTrustline(account: string, code: string, issuer: string): Promise<boolean> {
+  const res = await fetch(`${HORIZON_URL}/accounts/${account}`);
+  if (!res.ok) return false;
+  const data = await res.json();
+  const balances = (data.balances ?? []) as Array<{ asset_code?: string; asset_issuer?: string }>;
+  return balances.some((b) => b.asset_code === code && b.asset_issuer === issuer);
+}
+
+/** Builds an unsigned classic `changeTrust` transaction for the given asset. */
+export async function buildEstablishTrustlineTransaction(account: string, code: string, issuer: string): Promise<string> {
+  const server = getRpcServer();
+  const sourceAccount = await server.getAccount(account);
+  const tx = new TransactionBuilder(sourceAccount as unknown as Account, {
+    fee: BASE_FEE,
+    networkPassphrase: STELLAR_NETWORK,
+  })
+    .addOperation(Operation.changeTrust({ asset: new Asset(code, issuer) }))
+    .setTimeout(TX_TIMEOUT_SECONDS)
+    .build();
+  return tx.toXDR();
+}
+
+/**
+ * Borrower: if the pool's USDC asset is a classic-backed token the borrower's
+ * account doesn't yet trust, returns an unsigned trustline transaction to
+ * sign first. Returns null if no trustline is needed (already trusted, or
+ * the asset is native XLM).
+ */
+export async function ensureUsdcTrustline(account: string): Promise<string | null> {
+  const classicAsset = await getClassicAsset(usdcAssetId(), account);
+  if (!classicAsset) return null;
+
+  const trusted = await hasTrustline(account, classicAsset.code, classicAsset.issuer);
+  if (trusted) return null;
+
+  return buildEstablishTrustlineTransaction(account, classicAsset.code, classicAsset.issuer);
 }
 
 /** Lender: build a tx supplying USDC as non-collateralized pool liquidity. */
