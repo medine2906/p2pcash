@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { WalletConnect } from "@/components/WalletConnect";
 
 export default function Home() {
@@ -16,6 +17,12 @@ export default function Home() {
           Connect your Stellar wallet to get a cash advance in Turkish Lira against your crypto, or
           add funds to earn yield lending to others.
         </p>
+        <Link
+          href="/dashboard"
+          className="rounded-full bg-neutral-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-neutral-700"
+        >
+          Go to Dashboard
+        </Link>
       </main>
     </div>
   );
