@@ -50,7 +50,9 @@ export async function POST(req: NextRequest) {
       jwt: session.jwt,
       account: session.publicKey,
       assetCode: "USDC",
-      amount: String(usdcAmount),
+      // Matches the deposit-side fix: this anchor reads `amount` as the
+      // fiat (TRY) amount, not the on-chain USDC amount.
+      amount: String(tryAmount),
       dest: iban,
     });
 

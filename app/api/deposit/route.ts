@@ -29,7 +29,11 @@ export async function POST(req: NextRequest) {
       jwt: session.jwt,
       account: session.publicKey,
       assetCode: "USDC",
-      amount: quote.buy_amount,
+      // This anchor's minimum-deposit check reads `amount` as the fiat (TRY)
+      // amount being sent in, not the on-chain USDC amount from the quote —
+      // confirmed by "amount below minimum (50.00 TRY)" firing against the
+      // (much smaller) USDC amount.
+      amount: String(tryAmount),
       quoteId: quote.id,
     });
 
