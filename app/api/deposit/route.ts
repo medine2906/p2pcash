@@ -55,9 +55,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ deposit: row, instructions: deposit.instructions, quote });
   } catch (err) {
-    // TEMP DIAGNOSTIC: pinpointing which header assignment throws the
-    // ByteString TypeError. Remove once root-caused.
-    console.error("[DEBUG] /api/deposit error:", err);
     return NextResponse.json(
       { error: getErrorMessage(err, "Failed to start deposit") },
       { status: 502 },
