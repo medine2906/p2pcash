@@ -91,6 +91,11 @@ function authHeaders(jwt: string): HeadersInit {
   return { Authorization: `Bearer ${jwt}` };
 }
 
+/** This anchor's SEP-6 endpoints reject amounts with more than 2 decimal places. */
+function formatAnchorAmount(amount: string | number): string {
+  return Number(amount).toFixed(2);
+}
+
 async function assertOk(res: Response, label: string) {
   if (!res.ok) {
     throw new Error(`Anchor ${label} failed: ${res.status} ${await res.text()}`);
@@ -166,7 +171,7 @@ export async function startSep6Deposit(req: Sep6DepositRequest): Promise<Sep6Dep
   const url = new URL(`${transferServer}/deposit`);
   url.searchParams.set("asset_code", req.assetCode);
   url.searchParams.set("account", req.account);
-  if (req.amount) url.searchParams.set("amount", req.amount);
+  if (req.amount) url.searchParams.set("amount", formatAnchorAmount(req.amount));
   if (req.quoteId) url.searchParams.set("quote_id", req.quoteId);
 
   const res = await fetch(url.toString(), { headers: authHeaders(req.jwt) });
@@ -203,7 +208,7 @@ export async function startSep6Withdraw(req: Sep6WithdrawRequest): Promise<Sep6W
   url.searchParams.set("account", req.account);
   url.searchParams.set("type", "bank_account");
   url.searchParams.set("dest", req.dest);
-  if (req.amount) url.searchParams.set("amount", req.amount);
+  if (req.amount) url.searchParams.set("amount", formatAnchorAmount(req.amount));
   if (req.quoteId) url.searchParams.set("quote_id", req.quoteId);
 
   const res = await fetch(url.toString(), { headers: authHeaders(req.jwt) });
