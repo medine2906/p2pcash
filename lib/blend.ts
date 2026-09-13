@@ -1,5 +1,5 @@
 import "server-only";
-import { Account, Asset, Contract, Operation, TransactionBuilder, rpc, scValToNative, xdr } from "@stellar/stellar-sdk";
+import { Account, Asset, Contract, Memo, Operation, TransactionBuilder, rpc, scValToNative, xdr } from "@stellar/stellar-sdk";
 import { PoolContractV2, RequestType, type Request } from "@blend-capital/blend-sdk";
 import { FixedMath } from "@blend-capital/blend-sdk";
 import { requireEnv } from "./env";
@@ -145,6 +145,47 @@ export async function ensureUsdcTrustline(account: string): Promise<string | nul
   if (trusted) return null;
 
   return buildEstablishTrustlineTransaction(account, classicAsset.code, classicAsset.issuer);
+}
+
+/**
+ * Borrower: build the on-chain USDC payment SEP-6 withdrawal requires —
+ * `/sep6/withdraw` only returns *where* to send the asset (account + memo);
+ * the anchor won't convert/pay out fiat until it actually observes this
+ * payment arrive.
+ */
+export async function buildUsdcPaymentTransaction(
+  from: string,
+  to: string,
+  amount: number,
+  memoType?: "text" | "id" | "hash",
+  memo?: string,
+): Promise<string> {
+  const classicAsset = await getClassicAsset(usdcAssetId(), from);
+  if (!classicAsset) {
+    throw new Error("Pool USDC asset has no classic representation to pay out with");
+  }
+
+  const server = getRpcServer();
+  const sourceAccount = await server.getAccount(from);
+  const builder = new TransactionBuilder(sourceAccount as unknown as Account, {
+    fee: BASE_FEE,
+    networkPassphrase: STELLAR_NETWORK,
+  }).addOperation(
+    Operation.payment({
+      destination: to,
+      asset: new Asset(classicAsset.code, classicAsset.issuer),
+      amount: amount.toFixed(USDC_DECIMALS),
+    }),
+  );
+
+  if (memoType && memo) {
+    if (memoType === "text") builder.addMemo(Memo.text(memo));
+    else if (memoType === "id") builder.addMemo(Memo.id(memo));
+    else builder.addMemo(Memo.hash(memo));
+  }
+
+  const tx = builder.setTimeout(TX_TIMEOUT_SECONDS).build();
+  return tx.toXDR();
 }
 
 /** Lender: build a tx supplying USDC as non-collateralized pool liquidity. */

@@ -82,17 +82,31 @@ export function BorrowFlow() {
 
       // 4. Finalize: submit borrow tx + trigger SEP-6 withdrawal
       setStep({ index: 3, failed: false, message: null });
-      const { withdrawal } = await postJson<{ withdrawal: { id: string; status: string } }>(
-        "/api/loans/borrow/submit",
+      const { withdrawal, anchorDestination } = await postJson<{
+        withdrawal: { id: string; status: string };
+        anchorDestination: { accountId: string; memoType?: "text" | "id" | "hash"; memo?: string };
+      }>("/api/loans/borrow/submit", {
+        signedXdr: signedBorrowXdr,
+        collateralAsset,
+        collateralAmount: Number(collateralAmount),
+        usdcAmount,
+        tryAmount: Number(tryAmount),
+        iban,
+      });
+
+      // 5. Actually send the borrowed USDC to the anchor's account — the
+      // anchor won't convert/pay out TRY until it observes this arrive.
+      const { unsignedXdr: payoutXdr } = await postJson<{ unsignedXdr: string }>(
+        "/api/loans/borrow/payout/prepare",
         {
-          signedXdr: signedBorrowXdr,
-          collateralAsset,
-          collateralAmount: Number(collateralAmount),
-          usdcAmount,
-          tryAmount: Number(tryAmount),
-          iban,
+          toAccount: anchorDestination.accountId,
+          memoType: anchorDestination.memoType,
+          memo: anchorDestination.memo,
+          amount: usdcAmount,
         },
       );
+      const signedPayoutXdr = await signTransaction(payoutXdr);
+      await postJson("/api/loans/borrow/payout/submit", { signedXdr: signedPayoutXdr });
 
       setWithdrawalId(withdrawal.id);
       setWithdrawalStatus(withdrawal.status);
