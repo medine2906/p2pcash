@@ -84,7 +84,13 @@ export async function submitSep10Challenge(signedTransactionXdr: string): Promis
   if (!res.ok) {
     throw new Error(`Anchor SEP-10 token exchange failed: ${res.status} ${await res.text()}`);
   }
-  return res.json();
+  const data = await res.json();
+  // TEMP DIAGNOSTIC: a later Authorization header using this token throws
+  // "Cannot convert argument to a ByteString" — inspecting the raw value to
+  // find what non-Latin1 character the anchor's token contains. Remove once
+  // root-caused.
+  console.log("[DEBUG] SEP-10 token from anchor:", JSON.stringify(data.token));
+  return data;
 }
 
 function authHeaders(jwt: string): HeadersInit {
