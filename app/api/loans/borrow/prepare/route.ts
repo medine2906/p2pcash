@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { borrowAsset } from "@/lib/blend";
+import { borrowAsset, RestoreRequiredError } from "@/lib/blend";
 import { getErrorMessage } from "@/lib/errors";
 
 export async function POST(req: NextRequest) {
@@ -19,6 +19,9 @@ export async function POST(req: NextRequest) {
     const unsignedXdr = await borrowAsset(session.publicKey, usdcAmount);
     return NextResponse.json({ unsignedXdr });
   } catch (err) {
+    if (err instanceof RestoreRequiredError) {
+      return NextResponse.json({ needsRestore: true, restoreXdr: err.restoreXdr });
+    }
     return NextResponse.json(
       { error: getErrorMessage(err, "Failed to prepare borrow transaction") },
       { status: 502 },

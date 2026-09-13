@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { depositCollateral } from "@/lib/blend";
+import { depositCollateral, RestoreRequiredError } from "@/lib/blend";
 import { getErrorMessage } from "@/lib/errors";
 
 export async function POST(req: NextRequest) {
@@ -20,6 +20,9 @@ export async function POST(req: NextRequest) {
     const unsignedXdr = await depositCollateral(session.publicKey, asset, amount, body?.decimals ?? 7);
     return NextResponse.json({ unsignedXdr });
   } catch (err) {
+    if (err instanceof RestoreRequiredError) {
+      return NextResponse.json({ needsRestore: true, restoreXdr: err.restoreXdr });
+    }
     return NextResponse.json(
       { error: getErrorMessage(err, "Failed to prepare collateral transaction") },
       { status: 502 },

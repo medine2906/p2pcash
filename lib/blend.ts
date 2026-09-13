@@ -22,10 +22,27 @@ function usdcAssetId() {
 }
 
 /**
+ * Thrown when a Soroban simulation reports that some ledger entries the
+ * operation touches have expired and been archived (Soroban "state
+ * archival"). `restoreXdr` is an unsigned transaction that restores them;
+ * once submitted, the original operation can be re-prepared and will
+ * simulate cleanly.
+ */
+export class RestoreRequiredError extends Error {
+  constructor(public readonly restoreXdr: string) {
+    super("Some ledger entries this transaction needs have expired and must be restored first");
+    this.name = "RestoreRequiredError";
+  }
+}
+
+/**
  * Builds an unsigned, simulation-prepared Soroban transaction for a Blend
  * pool `submit` call. The caller (a connected wallet, via Stellar Wallets
  * Kit) signs the returned XDR client-side; nothing here ever touches a
  * private key.
+ *
+ * @throws {RestoreRequiredError} if the simulation reports expired ledger
+ * entries that must be restored before this operation can run.
  */
 async function buildSubmitTransaction(account: string, requests: Request[]): Promise<string> {
   const server = getRpcServer();
@@ -35,15 +52,33 @@ async function buildSubmitTransaction(account: string, requests: Request[]): Pro
   const operation = xdr.Operation.fromXDR(opXdr, "base64");
 
   const sourceAccount = await server.getAccount(account);
-  const builder = new TransactionBuilder(sourceAccount as unknown as Account, {
+  const tx = new TransactionBuilder(sourceAccount as unknown as Account, {
     fee: BASE_FEE,
     networkPassphrase: STELLAR_NETWORK,
   })
     .addOperation(operation)
-    .setTimeout(TX_TIMEOUT_SECONDS);
+    .setTimeout(TX_TIMEOUT_SECONDS)
+    .build();
 
-  const tx = builder.build();
-  const prepared = await server.prepareTransaction(tx);
+  const sim = await server.simulateTransaction(tx);
+
+  if (rpc.Api.isSimulationRestore(sim)) {
+    const restoreTx = new TransactionBuilder(sourceAccount as unknown as Account, {
+      fee: BASE_FEE,
+      networkPassphrase: STELLAR_NETWORK,
+    })
+      .setSorobanData(sim.restorePreamble.transactionData.build())
+      .addOperation(Operation.restoreFootprint({}))
+      .setTimeout(TX_TIMEOUT_SECONDS)
+      .build();
+    throw new RestoreRequiredError(restoreTx.toXDR());
+  }
+
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error(`Simulation failed: ${JSON.stringify(sim)}`);
+  }
+
+  const prepared = rpc.assembleTransaction(tx, sim).build();
   return prepared.toXDR();
 }
 

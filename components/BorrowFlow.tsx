@@ -45,6 +45,21 @@ export function BorrowFlow() {
     return data;
   }
 
+  /**
+   * Calls a Soroban-invoke `prepare` endpoint; if the simulation reports
+   * expired ledger entries, signs and submits the restore transaction first,
+   * then retries — transparent to the caller.
+   */
+  async function prepareWithRestore<T>(url: string, body: unknown): Promise<T> {
+    const res = await postJson<T & { needsRestore?: boolean; restoreXdr?: string }>(url, body);
+    if (res.needsRestore && res.restoreXdr) {
+      const signedRestoreXdr = await signTransaction(res.restoreXdr);
+      await postJson("/api/loans/restore/submit", { signedXdr: signedRestoreXdr });
+      return postJson<T>(url, body);
+    }
+    return res;
+  }
+
   async function startBorrow() {
     if (!publicKey) return;
     setBusy(true);
@@ -63,7 +78,7 @@ export function BorrowFlow() {
 
       // 2. Lock collateral
       setStep({ index: 1, failed: false, message: null });
-      const { unsignedXdr: collateralXdr } = await postJson<{ unsignedXdr: string }>(
+      const { unsignedXdr: collateralXdr } = await prepareWithRestore<{ unsignedXdr: string }>(
         "/api/loans/collateral/prepare",
         { asset: collateralAsset, amount: Number(collateralAmount) },
       );
@@ -75,7 +90,7 @@ export function BorrowFlow() {
       const { usdcAmount } = await postJson<{ usdcAmount: number }>("/api/loans/quote", {
         tryAmount: Number(tryAmount),
       });
-      const { unsignedXdr: borrowXdr } = await postJson<{ unsignedXdr: string }>("/api/loans/borrow/prepare", {
+      const { unsignedXdr: borrowXdr } = await prepareWithRestore<{ unsignedXdr: string }>("/api/loans/borrow/prepare", {
         usdcAmount,
       });
       const signedBorrowXdr = await signTransaction(borrowXdr);

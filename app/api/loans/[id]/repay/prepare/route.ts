@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { repayBorrow } from "@/lib/blend";
+import { repayBorrow, RestoreRequiredError } from "@/lib/blend";
 import { getErrorMessage } from "@/lib/errors";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -20,6 +20,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const unsignedXdr = await repayBorrow(session.publicKey, usdcAmount);
     return NextResponse.json({ unsignedXdr });
   } catch (err) {
+    if (err instanceof RestoreRequiredError) {
+      return NextResponse.json({ needsRestore: true, restoreXdr: err.restoreXdr });
+    }
     return NextResponse.json(
       { error: getErrorMessage(err, "Failed to prepare repay transaction") },
       { status: 502 },
