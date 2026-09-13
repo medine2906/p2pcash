@@ -7,6 +7,9 @@ const envSchema = z.object({
   NEXT_PUBLIC_STELLAR_NETWORK: z.enum(["TESTNET", "PUBLIC"]).default("TESTNET"),
   NEXT_PUBLIC_HORIZON_URL: z.string().default("https://horizon-testnet.stellar.org"),
   NEXT_PUBLIC_ANCHOR_URL: z.string().default("https://tr-mock-anchor.fly.dev"),
+  NEXT_PUBLIC_SOROBAN_RPC_URL: z.string().default("https://soroban-testnet.stellar.org"),
+  NEXT_PUBLIC_BLEND_POOL_ID: z.string().optional(),
+  NEXT_PUBLIC_USDC_CONTRACT_ID: z.string().optional(),
 });
 
 // Parsed lazily so a missing Supabase/anchor config doesn't crash `next build` or
@@ -19,6 +22,9 @@ export const env = envSchema.parse({
   NEXT_PUBLIC_STELLAR_NETWORK: process.env.NEXT_PUBLIC_STELLAR_NETWORK,
   NEXT_PUBLIC_HORIZON_URL: process.env.NEXT_PUBLIC_HORIZON_URL,
   NEXT_PUBLIC_ANCHOR_URL: process.env.NEXT_PUBLIC_ANCHOR_URL,
+  NEXT_PUBLIC_SOROBAN_RPC_URL: process.env.NEXT_PUBLIC_SOROBAN_RPC_URL,
+  NEXT_PUBLIC_BLEND_POOL_ID: process.env.NEXT_PUBLIC_BLEND_POOL_ID,
+  NEXT_PUBLIC_USDC_CONTRACT_ID: process.env.NEXT_PUBLIC_USDC_CONTRACT_ID,
 });
 
 export function requireEnv<K extends keyof typeof env>(key: K): NonNullable<(typeof env)[K]> {
